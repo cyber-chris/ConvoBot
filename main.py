@@ -5,8 +5,12 @@ import os
 import pyttsx3
 import string
 import speech_recognition as sr
+import torch
+from TTS.api import TTS
+import subprocess
 
 USER_SPEAK=True
+JARVIS_SPEAK=True
 
 def load_model():
     model_path = os.getenv("MODEL_PATH") or "/home/ct/llm-models/llama-2-13b-chat.Q4_K_M.gguf"
@@ -26,27 +30,35 @@ def load_model():
 def contains_punctuation(text) -> bool:
     return any(c in string.punctuation for c in reversed(text))
 
-def speech_to_text(recognizer) -> str:
+def speech_to_text() -> str:
+    r = sr.Recognizer()
     with sr.Microphone() as source:
         print("User: ", end='', flush=True)
-        audio = recognizer.listen(source)
+        audio = r.listen(source)
     try:
-        return recognizer.recognize_whisper(audio, model="base.en", language="english")
+        return r.recognize_whisper(audio, model="base.en", language="english")
     except:
         return ''
 
-def jarvis_speak(text):
-    pyttsx3.speak(text)
+def jarvis_speak(tts, text):
+    if not JARVIS_SPEAK:
+        return
+    tts.tts_to_file(text=text, file_path=output_path, speaker='p236')
+    subprocess.run(['aplay', output_path], check=True)
+
+# tts
+output_path = "./output/speech_test.wav"
+tts = TTS(model_name="tts_models/en/vctk/vits",
+          progress_bar=False).to("cuda" if torch.cuda.is_available() else "cpu")
 
 llm = load_model()
-r = sr.Recognizer() if USER_SPEAK else None
 
 personality = "Personality: You are Jarvis, an intelligent and helpful assistant of mine."
 
 while True:
     user_input = ''
     if USER_SPEAK:
-        user_input = speech_to_text(r)
+        user_input = speech_to_text()
         print(user_input)
     else:
         user_input = input("User: ")
@@ -54,15 +66,15 @@ while True:
     if not user_input:
         apology = "Apologies, I didn't catch that."
         print(apology)
-        jarvis_speak(apology)
+        jarvis_speak(tts, apology)
         continue
 
-	# I should evaluate the generator in a separate process? Use some multiprocessing.
+    # I should evaluate the generator in a separate process? Use some multiprocessing.
     speech_buffer = []
     for output in llm(f"{personality}\nUser: {user_input}\nResponse:", stream=True, reset=False):
         print(output, end='', flush=True)
         speech_buffer.append(output)
         if contains_punctuation(output):
-            jarvis_speak(''.join(speech_buffer))
+            jarvis_speak(tts, ''.join(speech_buffer))
             speech_buffer = []
     print()
