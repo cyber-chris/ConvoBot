@@ -1,1 +1,3 @@
 ctransformers[cuda]>=0.2.24<0.3
+SpeechRecognition==3.10.0
+pyttsx3
