@@ -8,6 +8,9 @@ import speech_recognition as sr
 import torch
 from TTS.api import TTS
 import subprocess
+import threading
+from nltk.tokenize import sent_tokenize
+from collections import deque
 
 USER_SPEAK=True
 JARVIS_SPEAK=True
@@ -30,6 +33,10 @@ def load_model():
 def contains_punctuation(text) -> bool:
     return any(c in string.punctuation for c in reversed(text))
 
+def is_sentence(text) -> bool:
+    tks = sent_tokenize(text)
+    return tks and (len(tks) > 1 or tks[-1][-1] in string.punctuation) 
+
 def speech_to_text() -> str:
     r = sr.Recognizer()
     with sr.Microphone() as source:
@@ -40,18 +47,50 @@ def speech_to_text() -> str:
     except:
         return ''
 
-def jarvis_speak(tts, text):
-    if not JARVIS_SPEAK:
+def jarvis_speak(tts, text, deque=None):
+    if not JARVIS_SPEAK or not text.strip():
         return
+    
+    output_path = "./output/speech_test.wav"
     tts.tts_to_file(text=text, file_path=output_path, speaker='p236')
     subprocess.run(['aplay', output_path], check=True)
 
-# tts
-output_path = "./output/speech_test.wav"
-tts = TTS(model_name="tts_models/en/vctk/vits",
-          progress_bar=False).to("cuda" if torch.cuda.is_available() else "cpu")
+def queue_worker(tts, deque, event):
+    buffer = ""
+
+    while True:
+        if not deque:
+            event.wait()
+        event.clear()
+        val = deque.popleft()
+        if val is None:
+            break
+
+        buffer += val
+        if is_sentence(buffer):
+            jarvis_speak(tts, buffer)
+            buffer = ""
+    if buffer:
+        jarvis_speak(tts, buffer)
+
+def completion(text):
+    available = threading.Event()
+    q = deque()
+
+    worker = threading.Thread(target=queue_worker, args=(tts, q, available))
+    worker.start()
+
+    for output in llm(text, stream=True, reset=False):
+        print(output, end='', flush=True)
+        q.append(output)
+        available.set()
+    print()
+    q.append(None)
+    available.set()
+    worker.join()
 
 llm = load_model()
+tts = TTS(model_name="tts_models/en/vctk/vits", progress_bar=False).to('cuda')
 
 personality = "Personality: You are Jarvis, an intelligent and helpful assistant of mine."
 
@@ -69,12 +108,6 @@ while True:
         jarvis_speak(tts, apology)
         continue
 
-    # I should evaluate the generator in a separate process? Use some multiprocessing.
-    speech_buffer = []
-    for output in llm(f"{personality}\nUser: {user_input}\nResponse:", stream=True, reset=False):
-        print(output, end='', flush=True)
-        speech_buffer.append(output)
-        if contains_punctuation(output):
-            jarvis_speak(tts, ''.join(speech_buffer))
-            speech_buffer = []
-    print()
+    text = f"{personality}\nUser: {user_input}\nResponse:"
+
+    completion(text)
