@@ -23,7 +23,7 @@ def load_model():
 
     # I have too little GPU VRAM to actually use my GPU, I think.
     llm = AutoModelForCausalLM.from_pretrained(
-        model_path, model_type="llama", gpu_layers=0)
+        model_path, model_type="llama", gpu_layers=0, context_length=1024)
 
     postload = time.time()
     print(f"Loaded in {postload - preload}")
