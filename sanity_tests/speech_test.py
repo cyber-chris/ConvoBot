@@ -12,7 +12,7 @@ with sr.Microphone() as source:
 
 # recognize speech using whisper
 try:
-    print("Whisper thinks you said " + r.recognize_whisper(audio, language="english"))
+    print("Whisper thinks you said " + r.recognize_whisper(audio, model="small.en", language="english"))
 except sr.UnknownValueError:
     print("Whisper could not understand audio")
 except sr.RequestError as e:

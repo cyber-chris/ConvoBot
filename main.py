@@ -1,8 +1,12 @@
+from typing import Optional
 from ctransformers import AutoModelForCausalLM
 import time
 import os
 import pyttsx3
 import string
+import speech_recognition as sr
+
+USER_SPEAK=True
 
 def load_model():
     model_path = os.getenv("MODEL_PATH") or "/home/ct/llm-models/llama-2-13b-chat.Q4_K_M.gguf"
@@ -22,14 +26,36 @@ def load_model():
 def contains_punctuation(text) -> bool:
     return any(c in string.punctuation for c in reversed(text))
 
+def speech_to_text(recognizer) -> str:
+    with sr.Microphone() as source:
+        print("User: ", end='', flush=True)
+        audio = recognizer.listen(source)
+    try:
+        return recognizer.recognize_whisper(audio, model="base.en", language="english")
+    except:
+        return ''
+
+def jarvis_speak(text):
+    pyttsx3.speak(text)
+
 llm = load_model()
+r = sr.Recognizer() if USER_SPEAK else None
 
 personality = "Personality: You are Jarvis, an intelligent and helpful assistant of mine."
 
 while True:
-    user_input = input("User: ")
-    if user_input.lower() == 'exit':
-        break
+    user_input = ''
+    if USER_SPEAK:
+        user_input = speech_to_text(r)
+        print(user_input)
+    else:
+        user_input = input("User: ")
+    
+    if not user_input:
+        apology = "Apologies, I didn't catch that."
+        print(apology)
+        jarvis_speak(apology)
+        continue
 
 	# I should evaluate the generator in a separate process? Use some multiprocessing.
     speech_buffer = []
@@ -37,6 +63,6 @@ while True:
         print(output, end='', flush=True)
         speech_buffer.append(output)
         if contains_punctuation(output):
-            pyttsx3.speak(''.join(speech_buffer))
+            jarvis_speak(''.join(speech_buffer))
             speech_buffer = []
     print()
