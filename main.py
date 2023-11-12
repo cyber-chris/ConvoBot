@@ -28,7 +28,7 @@ def load_model():
 
     # I have too little GPU VRAM to actually use my GPU, I think.
     llm = AutoModelForCausalLM.from_pretrained(
-        model_path, model_type="llama", gpu_layers=0, context_length=1024
+        model_path, model_type="llama", max_new_tokens=512, gpu_layers=0, context_length=1024
     )
 
     postload = time.time()
@@ -43,7 +43,7 @@ def contains_punctuation(text) -> bool:
 
 def is_sentence(text) -> bool:
     tks = sent_tokenize(text)
-    return tks and (len(tks) > 1 or tks[-1][-1] in string.punctuation)
+    return tks and (len(tks) > 1 or tks[-1][-1] in (',', '.', '!', '?', ':', ';'))
 
 
 def speech_to_text() -> str:
@@ -65,7 +65,7 @@ def jarvis_speak(tts, text, deque=None):
 
     fs = 22050
     audio_data = np.array(wav)
-    scaled = (audio_data * 1.25).clip(-1, 1)
+    scaled = (audio_data * 1.4).clip(-1, 1)
     sd.play(scaled, fs, blocking=True, blocksize=2048)
 
 
